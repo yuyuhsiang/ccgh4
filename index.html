@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>衣服領取通知</title>
+<style>
+    body, html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f4f9;
+    }
+    .container {
+        display: flex;
+        height: 100vh;
+        padding: 10px;
+        box-sizing: border-box;
+    }
+    .left-panel {
+        width: 20%;
+        padding: 20px;
+        background-color: #ffffff;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 10px;
+        height: calc(100vh - 20px);
+        box-sizing: border-box;
+        border-radius: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+    .right-panel {
+        width: 80%;
+        padding: 20px;
+        margin-left: 10px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
+    h2 {
+        color: #333;
+        margin-top: 0;
+    }
+    .button-group {
+        display: flex;
+        flex-direction: column;
+    }
+    .button-group button {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        background-color: #fff;
+        color: #333;
+        cursor: pointer;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+        font-size: 16px;
+        font-weight: normal;
+    }
+    .button-group button:hover {
+        border-color: #007bff;
+        color: #007bff;
+    }
+    /* "查看所有人" 按鈕顏色更新 */
+    #btn-all.active {
+        background-color: #e0f7e0; /* 青蘋果綠 */
+        border-color: #a5d6a7;
+        color: #388e3c;
+        font-weight: bold;
+    }
+    /* "毛衣" 按鈕顏色 */
+    #btn-sweater.active {
+        background-color: #d1ecf1; /* 淡藍色 */
+        border-color: #74c0fc;
+        color: #03539e;
+        font-weight: bold;
+    }
+    /* "制服" 按鈕顏色更新 */
+    #btn-uniform.active {
+        background-color: #fce4ec; /* 淡粉色 */
+        border-color: #f8bbd0;
+        color: #c2185b;
+        font-weight: bold;
+    }
+    #upload-section {
+        margin-top: auto;
+    }
+    #file-input {
+        display: none;
+    }
+    .upload-btn {
+        display: block;
+        text-align: center;
+        padding: 10px;
+        margin-top: 10px;
+        border: 1px solid #ccc;
+        background-color: #f8f9fa;
+        color: #555;
+        cursor: pointer;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+        font-size: 16px;
+    }
+    .upload-btn:hover {
+        background-color: #e2e6ea;
+        border-color: #888;
+    }
+    .chart-header {
+        position: relative;
+        width: 100%;
+        max-width: 450px;
+        margin: 20px auto;
+    }
+    #chart-container {
+        cursor: pointer;
+    }
+    #btn-reset-filter {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: none;
+        padding: 5px 10px;
+        font-size: 12px;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 15px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    #btn-reset-filter:hover {
+        background-color: #5a6268;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        padding: 12px 15px;
+        border: 1px solid #ddd;
+        text-align: left;
+    }
+    th {
+        background-color: #007bff;
+        color: white;
+    }
+    tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+    tr:hover {
+        background-color: #e9ecef;
+    }
+    .overdue {
+        color: red;
+        font-weight: bold;
+    }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <div class="left-panel">
+        <div>
+            <h2>篩選條件</h2>
+            <label>選擇表單:</label>
+            <div class="button-group">
+                <button id="btn-all" class="active">總覽</button>
+                <button id="btn-sweater">毛衣</button>
+                <button id="btn-uniform">制服</button>
+            </div>
+        </div>
+        <div id="upload-section">
+            <label for="file-input" class="upload-btn">上傳 Excel</label>
+            <input type="file" id="file-input" accept=".xlsx, .xls, .csv">
+        </div>
+    </div>
+    <div class="right-panel">
+        <h2 id="right-panel-title">所有人員衣物狀態總覽</h2>
+        <div class="chart-header" id="chart-header">
+            <div id="chart-container">
+                <canvas id="days-pie-chart"></canvas>
+            </div>
+            <button id="btn-reset-filter">返回查看全部</button>
+        </div>
+        <div id="output"></div>
+    </div>
+</div>
+
+<script>
+    let excelData = [];
+    let pieChart;
+    let currentDataForTable = [];
+
+    const resetButton = document.getElementById('btn-reset-filter');
+    const chartHeader = document.getElementById('chart-header');
+    const rightPanelTitle = document.getElementById('right-panel-title');
+    const allButtons = document.querySelectorAll('.button-group button');
+
+    function convertMinguoToAD(minguoDate) {
+        if (!minguoDate || typeof minguoDate !== 'string') return null;
+        const parts = minguoDate.split('.');
+        if (parts.length !== 3) return null;
+        try {
+            const year = parseInt(parts[0], 10) + 1911;
+            const month = parseInt(parts[1], 10) - 1;
+            const day = parseInt(parts[2], 10);
+            return new Date(year, month, day);
+        } catch (e) { return null; }
+    }
+
+    document.getElementById('file-input').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+                header: ["編號", "單位", "員編", "姓名", "職稱", "到職日", "衣服種類", "領取日期"],
+                raw: false, range: 1
+            });
+            let processedData = [];
+            let lastPerson = {};
+            jsonData.forEach(row => {
+                if (row["姓名"] && row["姓名"].trim() !== "") lastPerson = row;
+                if (row["衣服種類"] && row["領取日期"]) {
+                    processedData.push({...lastPerson, "衣服種類": row["衣服種類"], "領取日期": row["領取日期"]});
+                } else if (row["衣服種類"] && !row["領取日期"]) {
+                    processedData.push({...lastPerson, "衣服種類": row["衣服種類"], "領取日期": null});
+                }
+            });
+            excelData = processedData;
+            
+            allButtons.forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn-all').classList.add('active');
+            displayAllData();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    allButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            allButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            const mode = this.id;
+            if (mode === 'btn-all') {
+                displayAllData();
+            } else {
+                filterAndDisplayData();
+            }
+        });
+    });
+
+    resetButton.addEventListener('click', function() {
+        renderTable(currentDataForTable);
+        this.style.display = 'none';
+    });
+    
+    function displayAllData() {
+        if (excelData.length === 0) {
+            document.getElementById('output').innerHTML = '<p>請先上傳 Excel 檔案。</p>';
+            return;
+        };
+
+        rightPanelTitle.textContent = '所有人員衣物狀態總覽';
+        chartHeader.style.display = 'block';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        currentDataForTable = excelData.map(row => {
+            const pickupDate = convertMinguoToAD(row['領取日期']);
+            let dayDiff = null;
+            if (pickupDate) {
+                const expiryDate = new Date(pickupDate.getTime());
+                if (row['衣服種類'] === '制服') {
+                    expiryDate.setFullYear(expiryDate.getFullYear() + 2);
+                } else if (row['衣服種類'] === '毛衣') {
+                    expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+                }
+                const timeDiff = expiryDate.getTime() - today.getTime();
+                dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            }
+            return { ...row, dayDiff: dayDiff };
+        });
+        
+        updateAllModePieChart(currentDataForTable);
+        renderTable(currentDataForTable, true);
+    }
+
+    function filterAndDisplayData() {
+        if (excelData.length === 0) {
+            document.getElementById('output').innerHTML = '<p>請先上傳 Excel 檔案。</p>';
+            return;
+        }
+
+        rightPanelTitle.textContent = '應更換人員列表 (含已過期)';
+        chartHeader.style.display = 'block';
+        
+        const activeButton = document.querySelector('.button-group .active');
+        const selectedClothing = activeButton.id === 'btn-uniform' ? '制服' : '毛衣';
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const oneMonthFromNow = new Date();
+        oneMonthFromNow.setDate(today.getDate() + 30);
+
+        currentDataForTable = excelData.map(row => {
+            if (row['衣服種類'] !== selectedClothing) return null;
+            const pickupDate = convertMinguoToAD(row['領取日期']);
+            if (!pickupDate) return null;
+            const expiryDate = new Date(pickupDate.getTime());
+            if (selectedClothing === '制服') {
+                expiryDate.setFullYear(expiryDate.getFullYear() + 2);
+            } else if (selectedClothing === '毛衣') {
+                expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+            }
+            const timeDiff = expiryDate.getTime() - today.getTime();
+            const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            if (expiryDate <= oneMonthFromNow) {
+                return { ...row, dayDiff: dayDiff };
+            }
+            return null;
+        }).filter(item => item !== null);
+
+        updateReminderPieChart(currentDataForTable);
+        renderTable(currentDataForTable);
+        resetButton.style.display = 'none';
+    }
+
+    function renderTable(data, isAllMode = false) {
+        const outputDiv = document.getElementById('output');
+        
+        data.sort((a, b) => {
+            if (a.dayDiff === null || a.dayDiff === undefined) return 1;
+            if (b.dayDiff === null || b.dayDiff === undefined) return -1;
+            return a.dayDiff - b.dayDiff;
+        });
+
+        let tableHeader = isAllMode ? 
+            '<th>編號</th><th>單位</th><th>員編</th><th>姓名</th><th>衣服種類</th><th>原領取日期</th><th>狀態</th>' :
+            '<th>編號</th><th>單位</th><th>員編</th><th>姓名</th><th>職稱</th><th>原領取日期</th><th>狀態</th>';
+
+        if (data.length > 0) {
+            let table = `<table><thead><tr>${tableHeader}</tr></thead><tbody>`;
+            data.forEach(row => {
+                let statusText = '';
+                let rowClass = '';
+                
+                if (row.dayDiff === null || row.dayDiff === undefined) {
+                    statusText = '無領取日期';
+                } else if (row.dayDiff < 0) {
+                    statusText = `已過期 ${-row.dayDiff} 天`;
+                    rowClass = 'overdue';
+                } else if (row.dayDiff === 0) {
+                    statusText = '今天到期';
+                } else {
+                    statusText = `尚餘 ${row.dayDiff} 天`;
+                }
+                
+                let tableRowContent = isAllMode ?
+                    `<td>${row['編號']||''}</td><td>${row['單位']||''}</td><td>${row['員編']||''}</td><td>${row['姓名']||''}</td><td>${row['衣服種類']||''}</td><td>${row['領取日期']||''}</td><td>${statusText}</td>` :
+                    `<td>${row['編號']||''}</td><td>${row['單位']||''}</td><td>${row['員編']||''}</td><td>${row['姓名']||''}</td><td>${row['職稱']||''}</td><td>${row['領取日期']||''}</td><td>${statusText}</td>`;
+
+                table += `<tr class="${rowClass}">${tableRowContent}</tr>`;
+            });
+            table += '</tbody></table>';
+            outputDiv.innerHTML = table;
+        } else {
+            outputDiv.innerHTML = '<p>沒有符合條件的人員。</p>';
+        }
+    }
+    
+    function updateAllModePieChart(data) {
+        const stats = {
+            '已過期': data.filter(d => d.dayDiff !== null && d.dayDiff < 0),
+            '一個月內': data.filter(d => d.dayDiff !== null && d.dayDiff >= 0 && d.dayDiff <= 30),
+            '1-6 個月': data.filter(d => d.dayDiff > 30 && d.dayDiff <= 180),
+            '半年至一年': data.filter(d => d.dayDiff > 180 && d.dayDiff <= 365),
+            '一年以上': data.filter(d => d.dayDiff > 365),
+            '日期不明': data.filter(d => d.dayDiff === null),
+        };
+        const labels = ['已過期', '一個月內', '1-6 個月', '半年至一年', '一年以上', '日期不明'];
+        const chartData = labels.map(label => stats[label].length);
+        const backgroundColors = [
+            'rgba(255, 99, 132, 0.7)',
+            'rgba(255, 159, 64, 0.7)',
+            'rgba(255, 205, 86, 0.7)',
+            'rgba(75, 192, 192, 0.7)',
+            'rgba(54, 162, 235, 0.7)',
+            'rgba(153, 102, 255, 0.7)'
+        ];
+        
+        updateChart('pie', '所有衣物狀態分佈 (點擊可篩選)', labels, chartData, backgroundColors, stats);
+    }
+    
+    function updateReminderPieChart(data) {
+        const stats = {
+            '已過期': data.filter(d => d.dayDiff < 0),
+            '今天到期': data.filter(d => d.dayDiff === 0),
+            '1-7 天內': data.filter(d => d.dayDiff > 0 && d.dayDiff <= 7),
+            '8-30 天內': data.filter(d => d.dayDiff > 7 && d.dayDiff <= 30),
+        };
+        const labels = ['已過期', '今天到期', '1-7 天內', '8-30 天內'];
+        const chartData = labels.map(label => stats[label].length);
+        const backgroundColors = ['rgba(255, 99, 132, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(75, 192, 192, 0.7)'];
+        
+        updateChart('pie', '更換天數分佈 (點擊可篩選)', labels, chartData, backgroundColors, stats);
+    }
+
+    function updateChart(type, title, labels, data, backgroundColors, stats) {
+        const chartCanvas = document.getElementById('days-pie-chart').getContext('2d');
+        if (pieChart) pieChart.destroy();
+        
+        pieChart = new Chart(chartCanvas, {
+            type: type,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '人數',
+                    data: data,
+                    backgroundColor: backgroundColors,
+                    borderColor: ['#fff'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: title }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const clickedIndex = elements[0].index;
+                        const clickedLabel = pieChart.data.labels[clickedIndex];
+                        // 根據當前模式決定 renderTable 的第二個參數
+                        const isAllModeActive = document.getElementById('btn-all').classList.contains('active');
+                        renderTable(stats[clickedLabel], isAllModeActive);
+                        resetButton.style.display = 'block';
+                    }
+                }
+            },
+        });
+    }
+</script>
+
+</body>
+</html>
