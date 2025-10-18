@@ -152,9 +152,37 @@
     .btn-reset-filter:hover {
         background-color: #5a6268;
     }
+    .list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    /* 搜尋框容器 */
+    .search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    #keyword-search {
+        padding: 8px 30px 8px 15px; /* 右側留出空間給清除按鈕 */
+        border-radius: 20px;
+        border: 1px solid #ccc;
+        font-size: 14px;
+        width: 250px;
+    }
+    #clear-search-btn {
+        position: absolute;
+        right: 10px;
+        cursor: pointer;
+        display: none; /* 預設隱藏 */
+        color: #888;
+        font-size: 20px;
+        line-height: 1;
+    }
     table {
         width: 100%;
         border-collapse: collapse;
+        margin-top: 15px;
     }
     th, td {
         padding: 12px 15px;
@@ -183,7 +211,7 @@
 <body>
 
 <div class="header">
-    <h1>衣物更換提醒系統</h1>
+    <h1>智慧衣物更換提醒系統</h1>
 </div>
 
 <div class="page-container">
@@ -191,8 +219,8 @@
         <label><strong>選擇模式:</strong></label>
         <div class="button-group">
             <button id="btn-all" class="active">查看所有人狀態</button>
-            <button id="btn-sweater">毛衣</button>
-            <button id="btn-uniform">制服</button>
+            <button id="btn-sweater">毛衣 (提醒)</button>
+            <button id="btn-uniform">制服 (提醒)</button>
         </div>
         <div id="upload-section">
             <label for="file-input" class="upload-btn">上傳 Excel</label>
@@ -203,20 +231,26 @@
         <div class="charts-wrapper">
             <div class="chart-card">
                 <button class="btn-reset-filter" id="btn-reset-pie">返回查看全部</button>
-                <h3 class="chart-title" id="pie-chart-title">衣物圓餅圖</h3>
+                <h3 class="chart-title" id="pie-chart-title">所有衣物狀態分佈</h3>
                 <div class="chart-container">
                     <canvas id="days-pie-chart"></canvas>
                 </div>
             </div>
             <div class="chart-card">
                  <button class="btn-reset-filter" id="btn-reset-bar">返回查看全部</button>
-                <h3 class="chart-title" id="bar-chart-title">衣物長條圖</h3>
+                <h3 class="chart-title" id="bar-chart-title">所有衣物狀態統計</h3>
                 <div class="chart-container">
                     <canvas id="expiry-bar-chart"></canvas>
                 </div>
             </div>
         </div>
-        <h2 id="right-panel-title">所有人員衣物狀態總覽</h2>
+        <div class="list-header">
+            <h2 id="right-panel-title">所有人員衣物狀態總覽</h2>
+            <div class="search-container">
+                <input type="text" id="keyword-search" placeholder="搜尋姓名、員編、單位等...">
+                <span id="clear-search-btn">&times;</span>
+            </div>
+        </div>
         <div id="output"></div>
     </div>
 </div>
@@ -235,6 +269,8 @@
     const barChartTitle = document.getElementById('bar-chart-title');
     const resetPieBtn = document.getElementById('btn-reset-pie');
     const resetBarBtn = document.getElementById('btn-reset-bar');
+    const searchInput = document.getElementById('keyword-search');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
 
     function convertMinguoToAD(minguoDate) {
         if (!minguoDate || typeof minguoDate !== 'string') return null;
@@ -300,6 +336,23 @@
         });
     });
     
+    // 搜尋框事件
+    searchInput.addEventListener('input', function() {
+        const keyword = this.value.trim().toLowerCase();
+        clearSearchBtn.style.display = keyword ? 'block' : 'none'; // 根據是否有文字來顯示/隱藏清除按鈕
+        
+        const tableRows = document.querySelectorAll('#output table tbody tr');
+        tableRows.forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(keyword) ? '' : 'none';
+        });
+    });
+
+    // 清除搜尋按鈕事件
+    clearSearchBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input')); // 手動觸發 input 事件來更新列表和按鈕狀態
+    });
+    
     function calculateDayDiff(row) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -325,8 +378,8 @@
         };
 
         rightPanelTitle.textContent = '所有人員衣物狀態總覽';
-        pieChartTitle.textContent = '衣物圓餅圖';
-        barChartTitle.textContent = '衣物長條圖';
+        pieChartTitle.textContent = '所有衣物狀態分佈';
+        barChartTitle.textContent = '所有衣物狀態統計';
         
         currentDataForTable = excelData.map(calculateDayDiff);
         
@@ -342,7 +395,7 @@
             return;
         }
 
-        rightPanelTitle.textContent = '應更換人員列表';
+        rightPanelTitle.textContent = '應更換人員列表 (含已過期)';
         pieChartTitle.textContent = '提醒狀態分佈';
         barChartTitle.textContent = '提醒狀態統計';
         
@@ -372,6 +425,9 @@
 
     function renderTable(data, isAllMode = false) {
         const outputDiv = document.getElementById('output');
+        
+        searchInput.value = '';
+        clearSearchBtn.style.display = 'none';
         
         data.sort((a, b) => {
             if (a.dayDiff === null) return 1;
@@ -470,7 +526,6 @@
                         font: {
                             weight: 'bold'
                         },
-                        // 修改 anchor 和 align 使其置中
                         anchor: 'center',
                         align: 'center'
                     }
