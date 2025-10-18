@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>衣服領取通知</title>
+<title>智慧衣物更換提醒系統</title>
 <style>
     body, html {
         margin: 0;
@@ -12,80 +12,82 @@
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: #f4f4f9;
     }
-    .container {
-        display: flex;
-        height: 100vh;
-        padding: 10px;
-        box-sizing: border-box;
+    .header {
+        padding: 15px 20px;
+        text-align: center;
+        background-color: #f4f4f9; /* 與背景色相同 */
     }
-    .left-panel {
-        width: 20%;
-        padding: 20px;
-        background-color: #ffffff;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-        position: sticky;
-        top: 10px;
-        height: calc(100vh - 20px);
-        box-sizing: border-box;
-        border-radius: 15px;
+    .header h1 {
+        margin: 0;
+        color: #333;
+        font-size: 24px;
+    }
+    .page-container {
         display: flex;
         flex-direction: column;
+        height: calc(100vh - 59px); /* 減去 header 的高度 */
+        box-sizing: border-box;
     }
-    .right-panel {
-        width: 80%;
+    .top-panel {
+        margin: 0 10px;
+        padding: 15px 20px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        box-sizing: border-box;
+        z-index: 10;
+    }
+    .main-content {
+        flex-grow: 1;
         padding: 20px;
-        margin-left: 10px;
         overflow-y: auto;
         display: flex;
         flex-direction: column;
     }
-    h2 {
-        color: #333;
-        margin-top: 0;
-    }
     .button-group {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        gap: 10px;
     }
     .button-group button {
-        padding: 10px;
-        margin-bottom: 10px;
+        padding: 8px 18px;
+        margin-bottom: 0;
         border: 1px solid #ccc;
         background-color: #fff;
         color: #333;
         cursor: pointer;
         border-radius: 20px;
         transition: all 0.3s ease;
-        font-size: 16px;
+        font-size: 15px;
         font-weight: normal;
     }
     .button-group button:hover {
         border-color: #007bff;
         color: #007bff;
     }
-    /* "查看所有人" 按鈕顏色更新 */
     #btn-all.active {
-        background-color: #e0f7e0; /* 青蘋果綠 */
+        background-color: #e0f7e0;
         border-color: #a5d6a7;
         color: #388e3c;
         font-weight: bold;
     }
-    /* "毛衣" 按鈕顏色 */
     #btn-sweater.active {
-        background-color: #d1ecf1; /* 淡藍色 */
+        background-color: #d1ecf1;
         border-color: #74c0fc;
         color: #03539e;
         font-weight: bold;
     }
-    /* "制服" 按鈕顏色更新 */
     #btn-uniform.active {
-        background-color: #fce4ec; /* 淡粉色 */
+        background-color: #fce4ec;
         border-color: #f8bbd0;
         color: #c2185b;
         font-weight: bold;
     }
     #upload-section {
-        margin-top: auto;
+        margin-left: auto;
     }
     #file-input {
         display: none;
@@ -93,19 +95,18 @@
     .upload-btn {
         display: block;
         text-align: center;
-        padding: 10px;
-        margin-top: 10px;
-        border: 1px solid #ccc;
+        padding: 8px 18px;
+        border: 1px solid #6c757d;
         background-color: #f8f9fa;
-        color: #555;
+        color: #495057;
         cursor: pointer;
         border-radius: 20px;
         transition: all 0.3s ease;
-        font-size: 16px;
+        font-size: 15px;
     }
     .upload-btn:hover {
-        background-color: #e2e6ea;
-        border-color: #888;
+        background-color: #6c757d;
+        color: #fff;
     }
     .chart-header {
         position: relative;
@@ -163,23 +164,24 @@
 </head>
 <body>
 
-<div class="container">
-    <div class="left-panel">
-        <div>
-            <h2>篩選條件</h2>
-            <label>選擇表單:</label>
-            <div class="button-group">
-                <button id="btn-all" class="active">總覽</button>
-                <button id="btn-sweater">毛衣</button>
-                <button id="btn-uniform">制服</button>
-            </div>
+<div class="header">
+    <h1>衣物更換提醒系統</h1>
+</div>
+
+<div class="page-container">
+    <div class="top-panel">
+        <label><strong>選擇模式:</strong></label>
+        <div class="button-group">
+            <button id="btn-all" class="active">查看所有人狀態</button>
+            <button id="btn-sweater">毛衣</button>
+            <button id="btn-uniform">制服</button>
         </div>
         <div id="upload-section">
             <label for="file-input" class="upload-btn">上傳 Excel</label>
             <input type="file" id="file-input" accept=".xlsx, .xls, .csv">
         </div>
     </div>
-    <div class="right-panel">
+    <div class="main-content">
         <h2 id="right-panel-title">所有人員衣物狀態總覽</h2>
         <div class="chart-header" id="chart-header">
             <div id="chart-container">
@@ -442,7 +444,6 @@
                     if (elements.length > 0) {
                         const clickedIndex = elements[0].index;
                         const clickedLabel = pieChart.data.labels[clickedIndex];
-                        // 根據當前模式決定 renderTable 的第二個參數
                         const isAllModeActive = document.getElementById('btn-all').classList.contains('active');
                         renderTable(stats[clickedLabel], isAllModeActive);
                         resetButton.style.display = 'block';
