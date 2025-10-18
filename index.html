@@ -15,7 +15,7 @@
     .header {
         padding: 15px 20px;
         text-align: center;
-        background-color: #f4f4f9; /* 與背景色相同 */
+        background-color: #f4f4f9;
     }
     .header h1 {
         margin: 0;
@@ -25,7 +25,7 @@
     .page-container {
         display: flex;
         flex-direction: column;
-        height: calc(100vh - 59px); /* 減去 header 的高度 */
+        height: calc(100vh - 59px);
         box-sizing: border-box;
     }
     .top-panel {
@@ -108,19 +108,36 @@
         background-color: #6c757d;
         color: #fff;
     }
-    .chart-header {
-        position: relative;
+    .charts-wrapper {
+        display: flex;
+        gap: 20px;
         width: 100%;
-        max-width: 450px;
-        margin: 20px auto;
+        margin-bottom: 20px;
     }
-    #chart-container {
+    .chart-card {
+        flex: 1;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        position: relative;
+    }
+    .chart-title {
+        text-align: center;
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #495057;
+        font-size: 16px;
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
         cursor: pointer;
     }
-    #btn-reset-filter {
+    .btn-reset-filter {
         position: absolute;
-        top: 0;
-        right: 0;
+        top: 15px;
+        right: 15px;
         display: none;
         padding: 5px 10px;
         font-size: 12px;
@@ -130,14 +147,14 @@
         border-radius: 15px;
         cursor: pointer;
         transition: background-color 0.3s;
+        z-index: 5;
     }
-    #btn-reset-filter:hover {
+    .btn-reset-filter:hover {
         background-color: #5a6268;
     }
     table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 20px;
     }
     th, td {
         padding: 12px 15px;
@@ -161,6 +178,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 </head>
 <body>
 
@@ -182,26 +200,41 @@
         </div>
     </div>
     <div class="main-content">
-        <h2 id="right-panel-title">所有人員衣物狀態總覽</h2>
-        <div class="chart-header" id="chart-header">
-            <div id="chart-container">
-                <canvas id="days-pie-chart"></canvas>
+        <div class="charts-wrapper">
+            <div class="chart-card">
+                <button class="btn-reset-filter" id="btn-reset-pie">返回查看全部</button>
+                <h3 class="chart-title" id="pie-chart-title">衣物圓餅圖</h3>
+                <div class="chart-container">
+                    <canvas id="days-pie-chart"></canvas>
+                </div>
             </div>
-            <button id="btn-reset-filter">返回查看全部</button>
+            <div class="chart-card">
+                 <button class="btn-reset-filter" id="btn-reset-bar">返回查看全部</button>
+                <h3 class="chart-title" id="bar-chart-title">衣物長條圖</h3>
+                <div class="chart-container">
+                    <canvas id="expiry-bar-chart"></canvas>
+                </div>
+            </div>
         </div>
+        <h2 id="right-panel-title">所有人員衣物狀態總覽</h2>
         <div id="output"></div>
     </div>
 </div>
 
 <script>
+    // 註冊 Chart.js 數據標籤外掛
+    Chart.register(ChartDataLabels);
+
     let excelData = [];
-    let pieChart;
+    let pieChart, barChart;
     let currentDataForTable = [];
 
-    const resetButton = document.getElementById('btn-reset-filter');
-    const chartHeader = document.getElementById('chart-header');
     const rightPanelTitle = document.getElementById('right-panel-title');
     const allButtons = document.querySelectorAll('.button-group button');
+    const pieChartTitle = document.getElementById('pie-chart-title');
+    const barChartTitle = document.getElementById('bar-chart-title');
+    const resetPieBtn = document.getElementById('btn-reset-pie');
+    const resetBarBtn = document.getElementById('btn-reset-bar');
 
     function convertMinguoToAD(minguoDate) {
         if (!minguoDate || typeof minguoDate !== 'string') return null;
@@ -232,10 +265,8 @@
             let lastPerson = {};
             jsonData.forEach(row => {
                 if (row["姓名"] && row["姓名"].trim() !== "") lastPerson = row;
-                if (row["衣服種類"] && row["領取日期"]) {
-                    processedData.push({...lastPerson, "衣服種類": row["衣服種類"], "領取日期": row["領取日期"]});
-                } else if (row["衣服種類"] && !row["領取日期"]) {
-                    processedData.push({...lastPerson, "衣服種類": row["衣服種類"], "領取日期": null});
+                if (row["衣服種類"]) {
+                     processedData.push({...lastPerson, "衣服種類": row["衣服種類"], "領取日期": row["領取日期"] || null});
                 }
             });
             excelData = processedData;
@@ -260,12 +291,33 @@
             }
         });
     });
-
-    resetButton.addEventListener('click', function() {
-        renderTable(currentDataForTable);
-        this.style.display = 'none';
+    
+    [resetPieBtn, resetBarBtn].forEach(btn => {
+        btn.addEventListener('click', function() {
+            renderTable(currentDataForTable);
+            resetPieBtn.style.display = 'none';
+            resetBarBtn.style.display = 'none';
+        });
     });
     
+    function calculateDayDiff(row) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const pickupDate = convertMinguoToAD(row['領取日期']);
+        let dayDiff = null;
+        if (pickupDate) {
+            const expiryDate = new Date(pickupDate.getTime());
+            if (row['衣服種類'] === '制服') {
+                expiryDate.setFullYear(expiryDate.getFullYear() + 2);
+            } else if (row['衣服種類'] === '毛衣') {
+                expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+            }
+            const timeDiff = expiryDate.getTime() - today.getTime();
+            dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        }
+        return { ...row, dayDiff: dayDiff };
+    }
+
     function displayAllData() {
         if (excelData.length === 0) {
             document.getElementById('output').innerHTML = '<p>請先上傳 Excel 檔案。</p>';
@@ -273,29 +325,15 @@
         };
 
         rightPanelTitle.textContent = '所有人員衣物狀態總覽';
-        chartHeader.style.display = 'block';
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        currentDataForTable = excelData.map(row => {
-            const pickupDate = convertMinguoToAD(row['領取日期']);
-            let dayDiff = null;
-            if (pickupDate) {
-                const expiryDate = new Date(pickupDate.getTime());
-                if (row['衣服種類'] === '制服') {
-                    expiryDate.setFullYear(expiryDate.getFullYear() + 2);
-                } else if (row['衣服種類'] === '毛衣') {
-                    expiryDate.setFullYear(expiryDate.getFullYear() + 3);
-                }
-                const timeDiff = expiryDate.getTime() - today.getTime();
-                dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-            }
-            return { ...row, dayDiff: dayDiff };
-        });
+        pieChartTitle.textContent = '衣物圓餅圖';
+        barChartTitle.textContent = '衣物長條圖';
         
-        updateAllModePieChart(currentDataForTable);
+        currentDataForTable = excelData.map(calculateDayDiff);
+        
+        updateAllModeCharts(currentDataForTable);
         renderTable(currentDataForTable, true);
+        resetPieBtn.style.display = 'none';
+        resetBarBtn.style.display = 'none';
     }
 
     function filterAndDisplayData() {
@@ -304,8 +342,9 @@
             return;
         }
 
-        rightPanelTitle.textContent = '應更換人員列表 (含已過期)';
-        chartHeader.style.display = 'block';
+        rightPanelTitle.textContent = '應更換人員列表';
+        pieChartTitle.textContent = '提醒狀態分佈';
+        barChartTitle.textContent = '提醒狀態統計';
         
         const activeButton = document.querySelector('.button-group .active');
         const selectedClothing = activeButton.id === 'btn-uniform' ? '制服' : '毛衣';
@@ -315,35 +354,28 @@
         const oneMonthFromNow = new Date();
         oneMonthFromNow.setDate(today.getDate() + 30);
 
-        currentDataForTable = excelData.map(row => {
-            if (row['衣服種類'] !== selectedClothing) return null;
-            const pickupDate = convertMinguoToAD(row['領取日期']);
-            if (!pickupDate) return null;
-            const expiryDate = new Date(pickupDate.getTime());
-            if (selectedClothing === '制服') {
-                expiryDate.setFullYear(expiryDate.getFullYear() + 2);
-            } else if (selectedClothing === '毛衣') {
-                expiryDate.setFullYear(expiryDate.getFullYear() + 3);
-            }
-            const timeDiff = expiryDate.getTime() - today.getTime();
-            const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-            if (expiryDate <= oneMonthFromNow) {
-                return { ...row, dayDiff: dayDiff };
-            }
-            return null;
-        }).filter(item => item !== null);
+        currentDataForTable = excelData
+            .filter(row => row['衣服種類'] === selectedClothing && row['領取日期'])
+            .map(calculateDayDiff)
+            .filter(row => {
+                const expiryDate = new Date();
+                expiryDate.setHours(0,0,0,0);
+                expiryDate.setDate(expiryDate.getDate() + row.dayDiff);
+                return expiryDate <= oneMonthFromNow;
+            });
 
-        updateReminderPieChart(currentDataForTable);
+        updateReminderCharts(currentDataForTable);
         renderTable(currentDataForTable);
-        resetButton.style.display = 'none';
+        resetPieBtn.style.display = 'none';
+        resetBarBtn.style.display = 'none';
     }
 
     function renderTable(data, isAllMode = false) {
         const outputDiv = document.getElementById('output');
         
         data.sort((a, b) => {
-            if (a.dayDiff === null || a.dayDiff === undefined) return 1;
-            if (b.dayDiff === null || b.dayDiff === undefined) return -1;
+            if (a.dayDiff === null) return 1;
+            if (b.dayDiff === null) return -1;
             return a.dayDiff - b.dayDiff;
         });
 
@@ -356,8 +388,7 @@
             data.forEach(row => {
                 let statusText = '';
                 let rowClass = '';
-                
-                if (row.dayDiff === null || row.dayDiff === undefined) {
+                if (row.dayDiff === null) {
                     statusText = '無領取日期';
                 } else if (row.dayDiff < 0) {
                     statusText = `已過期 ${-row.dayDiff} 天`;
@@ -367,7 +398,6 @@
                 } else {
                     statusText = `尚餘 ${row.dayDiff} 天`;
                 }
-                
                 let tableRowContent = isAllMode ?
                     `<td>${row['編號']||''}</td><td>${row['單位']||''}</td><td>${row['員編']||''}</td><td>${row['姓名']||''}</td><td>${row['衣服種類']||''}</td><td>${row['領取日期']||''}</td><td>${statusText}</td>` :
                     `<td>${row['編號']||''}</td><td>${row['單位']||''}</td><td>${row['員編']||''}</td><td>${row['姓名']||''}</td><td>${row['職稱']||''}</td><td>${row['領取日期']||''}</td><td>${statusText}</td>`;
@@ -381,76 +411,96 @@
         }
     }
     
-    function updateAllModePieChart(data) {
+    function updateAllModeCharts(data) {
         const stats = {
-            '已過期': data.filter(d => d.dayDiff !== null && d.dayDiff < 0),
-            '一個月內': data.filter(d => d.dayDiff !== null && d.dayDiff >= 0 && d.dayDiff <= 30),
+            '已過期': data.filter(d => d.dayDiff < 0),
+            '一個月內': data.filter(d => d.dayDiff >= 0 && d.dayDiff <= 30),
             '1-6 個月': data.filter(d => d.dayDiff > 30 && d.dayDiff <= 180),
             '半年至一年': data.filter(d => d.dayDiff > 180 && d.dayDiff <= 365),
             '一年以上': data.filter(d => d.dayDiff > 365),
             '日期不明': data.filter(d => d.dayDiff === null),
         };
-        const labels = ['已過期', '一個月內', '1-6 個月', '半年至一年', '一年以上', '日期不明'];
-        const chartData = labels.map(label => stats[label].length);
-        const backgroundColors = [
-            'rgba(255, 99, 132, 0.7)',
-            'rgba(255, 159, 64, 0.7)',
-            'rgba(255, 205, 86, 0.7)',
-            'rgba(75, 192, 192, 0.7)',
-            'rgba(54, 162, 235, 0.7)',
-            'rgba(153, 102, 255, 0.7)'
-        ];
+        const labels = Object.keys(stats);
+        const chartData = Object.values(stats).map(d => d.length);
+        const colors = ['rgba(255, 99, 132, 0.7)', 'rgba(255, 159, 64, 0.7)', 'rgba(255, 205, 86, 0.7)', 'rgba(75, 192, 192, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(153, 102, 255, 0.7)'];
         
-        updateChart('pie', '所有衣物狀態分佈 (點擊可篩選)', labels, chartData, backgroundColors, stats);
+        updateChart(pieChart, 'days-pie-chart', 'pie', labels, chartData, colors, stats, 'pie');
+        updateChart(barChart, 'expiry-bar-chart', 'bar', labels, chartData, colors, stats, 'bar');
     }
     
-    function updateReminderPieChart(data) {
+    function updateReminderCharts(data) {
         const stats = {
             '已過期': data.filter(d => d.dayDiff < 0),
             '今天到期': data.filter(d => d.dayDiff === 0),
             '1-7 天內': data.filter(d => d.dayDiff > 0 && d.dayDiff <= 7),
             '8-30 天內': data.filter(d => d.dayDiff > 7 && d.dayDiff <= 30),
         };
-        const labels = ['已過期', '今天到期', '1-7 天內', '8-30 天內'];
-        const chartData = labels.map(label => stats[label].length);
-        const backgroundColors = ['rgba(255, 99, 132, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(75, 192, 192, 0.7)'];
+        const labels = Object.keys(stats);
+        const chartData = Object.values(stats).map(d => d.length);
+        const colors = ['rgba(255, 99, 132, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(75, 192, 192, 0.7)'];
         
-        updateChart('pie', '更換天數分佈 (點擊可篩選)', labels, chartData, backgroundColors, stats);
+        updateChart(pieChart, 'days-pie-chart', 'pie', labels, chartData, colors, stats, 'pie');
+        updateChart(barChart, 'expiry-bar-chart', 'bar', labels, chartData, colors, stats, 'bar');
     }
 
-    function updateChart(type, title, labels, data, backgroundColors, stats) {
-        const chartCanvas = document.getElementById('days-pie-chart').getContext('2d');
-        if (pieChart) pieChart.destroy();
+    function updateChart(chartInstance, canvasId, type, labels, data, colors, stats, chartIdentifier) {
+        const chartCanvas = document.getElementById(canvasId).getContext('2d');
+        if (chartInstance) chartInstance.destroy();
         
-        pieChart = new Chart(chartCanvas, {
+        const chart = new Chart(chartCanvas, {
             type: type,
             data: {
                 labels: labels,
                 datasets: [{
                     label: '人數',
                     data: data,
-                    backgroundColor: backgroundColors,
-                    borderColor: ['#fff'],
-                    borderWidth: 2
+                    backgroundColor: colors,
+                    borderColor: type === 'bar' ? colors.map(c => c.replace('0.7', '1')) : '#fff',
+                    borderWidth: type === 'bar' ? 1 : 2
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top' },
-                    title: { display: true, text: title }
+                    legend: { display: type === 'pie' },
+                    datalabels: {
+                        formatter: (value) => value > 0 ? value : null,
+                        color: '#fff',
+                        font: {
+                            weight: 'bold'
+                        },
+                        // 修改 anchor 和 align 使其置中
+                        anchor: 'center',
+                        align: 'center'
+                    }
                 },
+                scales: type === 'bar' ? { 
+                    y: { 
+                        beginAtZero: true, 
+                        ticks: { stepSize: 1 } 
+                    } 
+                } : {},
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
                         const clickedIndex = elements[0].index;
-                        const clickedLabel = pieChart.data.labels[clickedIndex];
-                        const isAllModeActive = document.getElementById('btn-all').classList.contains('active');
-                        renderTable(stats[clickedLabel], isAllModeActive);
-                        resetButton.style.display = 'block';
+                        const clickedLabel = labels[clickedIndex];
+                        renderTable(stats[clickedLabel]);
+                        
+                        if (chartIdentifier === 'pie') {
+                            resetPieBtn.style.display = 'block';
+                            resetBarBtn.style.display = 'none';
+                        } else {
+                            resetBarBtn.style.display = 'block';
+                            resetPieBtn.style.display = 'none';
+                        }
                     }
                 }
             },
         });
+        
+        if (canvasId === 'days-pie-chart') pieChart = chart;
+        else barChart = chart;
     }
 </script>
 
