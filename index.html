@@ -157,14 +157,13 @@
         justify-content: space-between;
         align-items: center;
     }
-    /* 搜尋框容器 */
     .search-container {
         position: relative;
         display: flex;
         align-items: center;
     }
     #keyword-search {
-        padding: 8px 30px 8px 15px; /* 右側留出空間給清除按鈕 */
+        padding: 8px 30px 8px 15px;
         border-radius: 20px;
         border: 1px solid #ccc;
         font-size: 14px;
@@ -174,7 +173,7 @@
         position: absolute;
         right: 10px;
         cursor: pointer;
-        display: none; /* 預設隱藏 */
+        display: none;
         color: #888;
         font-size: 20px;
         line-height: 1;
@@ -211,7 +210,7 @@
 <body>
 
 <div class="header">
-    <h1>衣物更換提醒系統</h1>
+    <h1>智慧衣物更換提醒系統</h1>
 </div>
 
 <div class="page-container">
@@ -230,17 +229,17 @@
     <div class="main-content">
         <div class="charts-wrapper">
             <div class="chart-card">
-                <button class="btn-reset-filter" id="btn-reset-pie">返回查看全部</button>
-                <h3 class="chart-title" id="pie-chart-title">所有衣物狀態分佈</h3>
-                <div class="chart-container">
-                    <canvas id="days-pie-chart"></canvas>
-                </div>
-            </div>
-            <div class="chart-card">
                  <button class="btn-reset-filter" id="btn-reset-bar">返回查看全部</button>
                 <h3 class="chart-title" id="bar-chart-title">所有衣物狀態統計</h3>
                 <div class="chart-container">
                     <canvas id="expiry-bar-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <button class="btn-reset-filter" id="btn-reset-pie">返回查看全部</button>
+                <h3 class="chart-title" id="pie-chart-title">所有衣物狀態分佈</h3>
+                <div class="chart-container">
+                    <canvas id="days-pie-chart"></canvas>
                 </div>
             </div>
         </div>
@@ -336,10 +335,9 @@
         });
     });
     
-    // 搜尋框事件
     searchInput.addEventListener('input', function() {
         const keyword = this.value.trim().toLowerCase();
-        clearSearchBtn.style.display = keyword ? 'block' : 'none'; // 根據是否有文字來顯示/隱藏清除按鈕
+        clearSearchBtn.style.display = keyword ? 'block' : 'none';
         
         const tableRows = document.querySelectorAll('#output table tbody tr');
         tableRows.forEach(row => {
@@ -347,10 +345,9 @@
         });
     });
 
-    // 清除搜尋按鈕事件
     clearSearchBtn.addEventListener('click', function() {
         searchInput.value = '';
-        searchInput.dispatchEvent(new Event('input')); // 手動觸發 input 事件來更新列表和按鈕狀態
+        searchInput.dispatchEvent(new Event('input'));
     });
     
     function calculateDayDiff(row) {
@@ -395,7 +392,7 @@
             return;
         }
 
-        rightPanelTitle.textContent = '應更換人員列表';
+        rightPanelTitle.textContent = '應更換人員列表 (含已過期)';
         pieChartTitle.textContent = '提醒狀態分佈';
         barChartTitle.textContent = '提醒狀態統計';
         
